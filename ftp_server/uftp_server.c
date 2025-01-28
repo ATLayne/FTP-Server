@@ -59,7 +59,24 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
     }
 
     if(strncmp(command, delete_cmd, 6) == 0) {
-      system(command);
+      int n;
+      char fail_msg[] = "Could not delete file.\n";
+      char suc_msg[] = "File Deleted Successfully.\n";
+      char rm_cmd[50] = "rm";
+      strcat(rm_cmd, (command + 6));
+      printf("command to execute: %s\n", rm_cmd);
+
+      if(system(rm_cmd) != 0){
+        n = sendto(sockfd, fail_msg, strlen(fail_msg), 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in \"delete fail\" sendto");
+      } else {
+        n = sendto(sockfd, suc_msg, strlen(suc_msg), 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in \"delete suc\" sendto");
+      }
     }
 
 }
