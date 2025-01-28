@@ -13,7 +13,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define BUFSIZE 1024
+#define BUFSIZE 2048
+#define PACKETSIZE 1024
 
 /*
  * error - wrapper for perror
@@ -44,7 +45,7 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
 
     if(strncmp(command, ls_cmd, 2) == 0){
       FILE *fp;
-      char buffer[1024] = {0};
+      char buffer[BUFSIZE] = {0};
       int n;
 
       fp = popen(command, "r");
@@ -81,25 +82,46 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
 
     if(strncmp(command, get_cmd, 3) == 0){
       FILE *fp;
-      char buffer[1024] = {0};
+      char buffer[BUFSIZE] = {0};
       char *filename = command + 4;
       int n;
 
       filename[strlen(filename) - 1] = '\0';
       printf("filename: \"%s\"\n", filename);
 
-      fp = fopen(filename, "r");
+      fp = fopen(filename, "rb");
       if(fp == NULL){
         perror("Error opening file\n");
         exit(EXIT_FAILURE);
       }
       
-      while(fgets(buffer, sizeof(buffer), fp) != NULL){
-        n = sendto(sockfd, buffer, strlen(buffer), 0, 
-	       (struct sockaddr *) &clientaddr, clientlen);
-        if (n < 0) 
-          error("ERROR in \"ls\" sendto");
+      size_t bytes_read;
+      int pack_num = 0;
+
+      while ((bytes_read = fread(buffer, 1, BUFSIZE, fp)) > 0) {
+        char packet[sizeof(int) + BUFSIZE];
+        //memcpy(packet + sizeof(), pack_num, sizeof(int));
+        memcpy(packet + sizeof(int), buffer, bytes_read);
+        packet[0] = pack_num;
+        n = sendto(sockfd, packet, bytes_read + sizeof(int), 0, (struct sockaddr *) &clientaddr, sizeof(clientaddr));
+        if (n < 0) {
+            perror("Error sending data");
+            exit(1);
+        }
+        
+        pack_num++;
       }
+
+      /*
+      n = sendto(sockfd, buffer, 1024, 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0) 
+        error("ERROR in \"ls\" sendto");
+      */
+      
+
+      printf("bytes_read: %d\n", bytes_read);
+      printf("n: %d\n", n);
 
       fclose(fp);
 
