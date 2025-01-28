@@ -79,6 +79,33 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
       }
     }
 
+    if(strncmp(command, get_cmd, 3) == 0){
+      FILE *fp;
+      char buffer[1024] = {0};
+      char *filename = command + 4;
+      int n;
+
+      filename[strlen(filename) - 1] = '\0';
+      printf("filename: \"%s\"\n", filename);
+
+      fp = fopen(filename, "r");
+      if(fp == NULL){
+        perror("Error opening file\n");
+        exit(EXIT_FAILURE);
+      }
+      
+      while(fgets(buffer, sizeof(buffer), fp) != NULL){
+        n = sendto(sockfd, buffer, strlen(buffer), 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in \"ls\" sendto");
+      }
+
+      fclose(fp);
+
+    }
+
+
 }
 
 int main(int argc, char **argv) {
