@@ -23,16 +23,45 @@ void error(char *msg) {
   exit(1);
 }
 
-void execute_command(char *command) {
+void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, int clientlen) {
     printf("Command Recieved: %s\n", command);
-    char exit_cmd[] = "exit\n";
+    char exit_cmd[] = "exit";
+    char ls_cmd[] = "ls";
+    char delete_cmd[] = "delete";
+    char get_cmd[] = "get";
+    char put_cmd[] = "put";
     
-    if(strcmp(command, exit_cmd) == 0){
+    if(strncmp(command, exit_cmd, 4) == 0){
         printf("Exiting\n");
-        exit(0);
+        char ret_msg[] = "Server is terminating.\n";
+        int n = sendto(sockfd, ret_msg, strlen(ret_msg), 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in \"exit\" sendto");
+
+        exit(EXIT_SUCCESS);
     }
-    system(command);
-    system("ls");
+
+    if(strncmp(command, ls_cmd, 2) == 0){
+      FILE *fp;
+      char buffer[1024] = {0};
+      int n;
+
+      fp = popen(command, "r");
+      while(fgets(buffer, sizeof(buffer), fp) != NULL){
+        n = sendto(sockfd, buffer, strlen(buffer), 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in \"ls\" sendto");
+      }
+
+      pclose(fp);
+    }
+
+    if(strncmp(command, delete_cmd, 6) == 0) {
+      system(command);
+    }
+
 }
 
 int main(int argc, char **argv) {
@@ -102,7 +131,7 @@ int main(int argc, char **argv) {
     if (n < 0)
       error("ERROR in recvfrom");
 
-    execute_command(buf);
+    execute_command(buf, sockfd, clientaddr, clientlen);
 
     /* 
      * gethostbyaddr: determine who sent the datagram
