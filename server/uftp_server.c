@@ -47,13 +47,21 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
       FILE *fp;
       char buffer[BUFSIZE] = {0};
       int n;
+      int packet_number = 0;
+
+      char packet[sizeof(int) + BUFSIZE];
 
       fp = popen(command, "r");
       while(fgets(buffer, sizeof(buffer), fp) != NULL){
-        n = sendto(sockfd, buffer, strlen(buffer), 0, 
+        memcpy(packet + sizeof(int), buffer, strlen(buffer));
+        packet[0] = packet_number;
+
+        n = sendto(sockfd, packet, sizeof(int) + strlen(buffer), 0, 
 	       (struct sockaddr *) &clientaddr, clientlen);
         if (n < 0) 
           error("ERROR in \"ls\" sendto");
+
+        packet_number++;
       }
 
       pclose(fp);
@@ -100,7 +108,6 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
 
       while ((bytes_read = fread(buffer, 1, BUFSIZE, fp)) > 0) {
         char packet[sizeof(int) + BUFSIZE];
-        //memcpy(packet + sizeof(), pack_num, sizeof(int));
         memcpy(packet + sizeof(int), buffer, bytes_read);
         packet[0] = pack_num;
         n = sendto(sockfd, packet, bytes_read + sizeof(int), 0, (struct sockaddr *) &clientaddr, sizeof(clientaddr));

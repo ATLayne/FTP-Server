@@ -9,7 +9,7 @@ $(TARGET): uftp_server.c
 	$(CC) $(CFLAGS) -o $(TARGET) uftp_server.c;
 
 run: $(TARGET)
-	./$(TARGET) 5050
+	clear && ./$(TARGET) 5050
 
 clean:
 	rm -f $(TARGET)
