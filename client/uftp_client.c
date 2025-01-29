@@ -21,8 +21,8 @@ void error(char *msg) {
     exit(0);
 }
 
-void exit_cmd();
-void ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
+void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
+int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 void delete_cmd();
 void get_cmd();
 void put_cmd();
@@ -63,27 +63,32 @@ int main(int argc, char **argv) {
     serveraddr.sin_port = htons(portno);
 
     /* get a message from the user */
-    bzero(buf, BUFSIZE);
-    printf("Please enter msg: ");
-    fgets(buf, BUFSIZE, stdin);
+    while (1) {
+        bzero(buf, BUFSIZE);
+        printf("Please enter msg: ");
+        fgets(buf, BUFSIZE, stdin);
 
-    if(strncmp(buf, "exit", 4) == 0){
-        exit_cmd();
-    }
+        if(strncmp(buf, "exit", 4) == 0){
+            exit_cmd();
+        }
 
-    if(strncmp(buf, "ls", 2) == 0){
-        ls_cmd(buf, sockfd, serveraddr, serverlen);
+        if(strncmp(buf, "ls", 2) == 0){
+            if(ls_cmd(buf, sockfd, serveraddr, serverlen)){
+                perror("ls command failed\n");
+                exit(EXIT_FAILURE);
+            }
+        }
     }
 
     /* send the message to the server */
     serverlen = sizeof(serveraddr);
-    n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
+    n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
     if (n < 0) 
       error("ERROR in sendto");
     
     /* print the server's reply */
     printf("Command: %s\n", buf);
-    while((n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen)) > 0){
+    while((n = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
     
         if (n < 0) 
             error("ERROR in recvfrom");
@@ -95,31 +100,52 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-void exit_cmd(){
+void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     printf("In exit_cmd\n");
+    int n;
+
+    serverlen = sizeof(serveraddr);
+    n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
+    if (n < 0) 
+        error("ERROR in sendto");
+
+    while ((n = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0) {
+        if (n < 0) 
+            error("ERROR in recvfrom");
+    }
+    
+
+
     exit(EXIT_SUCCESS);
 }
 
-void ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
-    printf("In ls_cmd\n");
-
+int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     int n;
-    char seq_num[sizeof(int)];
-    printf("Command: %s\n", buf);
+    int packet_number = 0;
+    char term_string[4];
+    printf("Command: %s", buf);
 
     serverlen = sizeof(serveraddr);
-    n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
+    n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
     if (n < 0) 
-      error("ERROR in sendto");
+        error("ERROR in sendto");
 
-    while((n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen)) > 0){
-        memcpy(seq_num, buf, sizeof(int));
+    while((n = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
+        
         if (n < 0) 
             error("ERROR in recvfrom");
-
-        printf("Packet No. %d %s", seq_num ,buf + sizeof(int));
+        
+        memcpy(&packet_number, buf, sizeof(int));
+        memcpy(term_string, buf + sizeof(int), (4 * sizeof(char)));
+        
+        if(strncmp(term_string, "\n\n\n\n", 4) == 0){
+            bzero(buf, BUFSIZE);
+            return EXIT_SUCCESS;
+        }
+        
+        printf("Packet No. %d %s", packet_number, buf + sizeof(int) + (4 * sizeof(char)));
         bzero(buf, n);
-    }
 
-    exit(EXIT_SUCCESS);
+        n = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
+    }
 }

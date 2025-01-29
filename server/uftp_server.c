@@ -24,14 +24,20 @@ void error(char *msg) {
   exit(1);
 }
 
+/*
+ * Execute the specific command that was supplied to the server
+ */
 void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, int clientlen) {
     printf("Command Recieved: %s\n", command);
     char exit_cmd[] = "exit";
     char ls_cmd[] = "ls";
     char delete_cmd[] = "delete";
     char get_cmd[] = "get";
-    char put_cmd[] = "put";
+    //char put_cmd[] = "put";
     
+    /*
+     * exit command
+     */
     if(strncmp(command, exit_cmd, 4) == 0){
         printf("Exiting\n");
         char ret_msg[] = "Server is terminating.\n";
@@ -43,30 +49,61 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
         exit(EXIT_SUCCESS);
     }
 
+    /*
+     * ls command
+     */
     if(strncmp(command, ls_cmd, 2) == 0){
       FILE *fp;
       char buffer[BUFSIZE] = {0};
+      char term_string[] = "\n\n\n\n";
       int n;
       int packet_number = 0;
+      int packet_number_ret;
+      int ack = 0;
 
-      char packet[sizeof(int) + BUFSIZE];
+      char packet[sizeof(int) + (4 * sizeof(char)) + BUFSIZE];
+      bzero(packet, sizeof(int) + (4 * sizeof(char)) + BUFSIZE);
 
       fp = popen(command, "r");
       while(fgets(buffer, sizeof(buffer), fp) != NULL){
-        memcpy(packet + sizeof(int), buffer, strlen(buffer));
-        packet[0] = packet_number;
+        bzero(packet, sizeof(int) + (4 * sizeof(char)) + strlen(buffer));
+        memcpy(packet, &packet_number, sizeof(int));
+        memcpy(packet + sizeof(int) + (4 * sizeof(char)), buffer, strlen(buffer));
 
-        n = sendto(sockfd, packet, sizeof(int) + strlen(buffer), 0, 
-	       (struct sockaddr *) &clientaddr, clientlen);
-        if (n < 0) 
-          error("ERROR in \"ls\" sendto");
+        do {
+          n = sendto(sockfd, packet, sizeof(int) + (4 * sizeof(char)) + strlen(buffer), 0, 
+          (struct sockaddr *) &clientaddr, clientlen);
+          if (n < 0) 
+            error("ERROR in \"ls\" sendto");
+
+          n = recvfrom(sockfd, &packet_number_ret, sizeof(int), 0, (struct sockaddr *) &clientaddr, &clientlen);
+
+          printf("Packet Number Returned: %d\n", packet_number_ret);
+
+          if(packet_number_ret == packet_number){
+            ack = 1;
+          } else {
+            ack = 0;
+          }
+
+        } while (ack == 0);
 
         packet_number++;
       }
 
+      bzero(packet, sizeof(int) + (4 * sizeof(char)) + strlen(buffer));
+      memcpy(packet + sizeof(int), term_string, strlen(term_string));
+      n = sendto(sockfd, packet, sizeof(int) + (4 * sizeof(char)), 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in \"ls\" sendto");
+
       pclose(fp);
     }
 
+    /*
+     * delete command
+     */
     if(strncmp(command, delete_cmd, 6) == 0) {
       int n;
       char fail_msg[] = "Could not delete file.\n";
@@ -88,6 +125,9 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
       }
     }
 
+    /*
+     * get command
+     */
     if(strncmp(command, get_cmd, 3) == 0){
       FILE *fp;
       char buffer[BUFSIZE] = {0};
@@ -119,14 +159,6 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
         pack_num++;
       }
 
-      /*
-      n = sendto(sockfd, buffer, 1024, 0, 
-	       (struct sockaddr *) &clientaddr, clientlen);
-      if (n < 0) 
-        error("ERROR in \"ls\" sendto");
-      */
-      
-
       printf("bytes_read: %d\n", bytes_read);
       printf("n: %d\n", n);
 
@@ -143,9 +175,9 @@ int main(int argc, char **argv) {
   int clientlen; /* byte size of client's address */
   struct sockaddr_in serveraddr; /* server's addr */
   struct sockaddr_in clientaddr; /* client addr */
-  struct hostent *hostp; /* client host info */
+  //struct hostent *hostp; /* client host info */
   char buf[BUFSIZE]; /* message buf */
-  char *hostaddrp; /* dotted decimal host addr string */
+  //char *hostaddrp; /* dotted decimal host addr string */
   int optval; /* flag value for setsockopt */
   int n; /* message byte size */
 
@@ -209,23 +241,23 @@ int main(int argc, char **argv) {
     /* 
      * gethostbyaddr: determine who sent the datagram
      */
-    hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, 
-			  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
-    if (hostp == NULL)
-      error("ERROR on gethostbyaddr");
-    hostaddrp = inet_ntoa(clientaddr.sin_addr);
-    if (hostaddrp == NULL)
-      error("ERROR on inet_ntoa\n");
-    printf("server received datagram from %s (%s)\n", 
-	   hostp->h_name, hostaddrp);
-    printf("server received %d/%d bytes: %s\n", strlen(buf), n, buf);
+    // hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, 
+		// 	  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+    // if (hostp == NULL)
+    //   error("ERROR on gethostbyaddr");
+    // hostaddrp = inet_ntoa(clientaddr.sin_addr);
+    // if (hostaddrp == NULL)
+    //   error("ERROR on inet_ntoa\n");
+    // printf("server received datagram from %s (%s)\n", 
+	  //  hostp->h_name, hostaddrp);
+    // printf("server received %d/%d bytes: %s\n", strlen(buf), n, buf);
     
     /* 
      * sendto: echo the input back to the client 
      */
-    n = sendto(sockfd, buf, strlen(buf), 0, 
-	       (struct sockaddr *) &clientaddr, clientlen);
-    if (n < 0) 
-      error("ERROR in sendto");
+    // n = sendto(sockfd, buf, strlen(buf), 0, 
+	  //      (struct sockaddr *) &clientaddr, clientlen);
+    // if (n < 0) 
+    //   error("ERROR in sendto");
   }
 }
