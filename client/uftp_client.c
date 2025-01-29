@@ -190,9 +190,19 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
 }
 
 int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
+    setbuf(stdout, NULL);
+
     int n;
     char res_buf[8 + 2048];
     int packet_number;
+    char term_string[4];
+    FILE *fp;
+    char filename[50];
+
+    memcpy(filename, buf + 4, strlen(buf) - 4);
+
+    fp = fopen(filename, "w");
+    fp = fopen("download", "w");
 
     serverlen = sizeof(serveraddr);
     n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
@@ -204,14 +214,17 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
             error("ERROR in recvfrom");
         
         memcpy(&packet_number, res_buf, sizeof(int));
+        memcpy(term_string, res_buf +  4, 4 * sizeof(char));
         
-        if(strncmp(res_buf + 4, "\n\r\n\r", 4) == 0){
+        if(strncmp(term_string, "\n\r\n\r", 4) == 0){
             bzero(buf, BUFSIZE);
-            printf("term_string received\n");
+            printf("\n\nterm_string received\n");
+            fclose(fp);
             return(EXIT_SUCCESS);
         }
 
-        printf("%s", res_buf + 8);
+        fwrite(res_buf + 8,sizeof(char), n - 8,fp);
+        fwrite(res_buf + 8,sizeof(char), n - 8,stdout);
 
         n = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
 

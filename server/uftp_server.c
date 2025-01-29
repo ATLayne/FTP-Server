@@ -179,7 +179,8 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
         memcpy(packet, &packet_number, sizeof(int));
         memcpy(packet + 8, buffer, bytes_read);
 
-        printf("Packet Data: %s\n", packet + 8);
+        printf("Packet Data:\n");
+        fwrite(packet + 8,sizeof(char), bytes_read,stdout);
         do {
           n = sendto(sockfd, packet, 8 + bytes_read, 0, (struct sockaddr *) &clientaddr, clientlen);
           if (n < 0) 
@@ -200,6 +201,8 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
         packet_number++;
         bzero(packet, 8 + bytes_read);
       }
+
+      
       memcpy(packet + 4, term_string, 4);
       n = sendto(sockfd, packet, 8, 0, (struct sockaddr *) &clientaddr, clientlen);
 
