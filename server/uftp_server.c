@@ -150,10 +150,17 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
      * get command
      */
     if(strncmp(command, get_cmd, 3) == 0){
+      setbuf(stdout, NULL);
       FILE *fp;
       char buffer[BUFSIZE] = {0};
       char *filename = command + 4;
       int n;
+      char packet[8 + BUFSIZE] = {0};
+      size_t bytes_read;
+      int packet_number = 1;
+      int packet_number_returned;
+      int ack = 0;
+      char term_string[4] = "\n\r\n\r";
 
       filename[strlen(filename) - 1] = '\0';
       printf("filename: \"%s\"\n", filename);
@@ -163,25 +170,39 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
         perror("Error opening file\n");
         exit(EXIT_FAILURE);
       }
-      
-      size_t bytes_read;
-      int pack_num = 0;
 
       while ((bytes_read = fread(buffer, 1, BUFSIZE, fp)) > 0) {
-        char packet[sizeof(int) + BUFSIZE];
-        memcpy(packet + sizeof(int), buffer, bytes_read);
-        packet[0] = pack_num;
-        n = sendto(sockfd, packet, bytes_read + sizeof(int), 0, (struct sockaddr *) &clientaddr, sizeof(clientaddr));
-        if (n < 0) {
-            perror("Error sending data");
-            exit(1);
-        }
+        printf("bytes_read: %d\n", bytes_read);
+        printf("buffer len: %d\n", sizeof(buffer) / sizeof(buffer[0]));
+        printf("Packet Number: %d\n", packet_number);
         
-        pack_num++;
-      }
+        memcpy(packet, &packet_number, sizeof(int));
+        memcpy(packet + 8, buffer, bytes_read);
 
-      printf("bytes_read: %d\n", bytes_read);
-      printf("n: %d\n", n);
+        printf("Packet Data: %s\n", packet + 8);
+        do {
+          n = sendto(sockfd, packet, 8 + bytes_read, 0, (struct sockaddr *) &clientaddr, clientlen);
+          if (n < 0) 
+            error("ERROR in \"ls\" sendto");
+
+          n = recvfrom(sockfd, &packet_number_returned, sizeof(int), 0, (struct sockaddr *) &clientaddr, &clientlen);
+
+          //printf("Packet Number Returned: %d\n", packet_number_returned);
+
+          if(packet_number_returned == packet_number){
+            ack = 1;
+          } else {
+            ack = 0;
+          }
+
+        } while (ack == 0);
+        
+        packet_number++;
+        bzero(packet, 8 + bytes_read);
+      }
+      memcpy(packet + 4, term_string, 4);
+      n = sendto(sockfd, packet, 8, 0, (struct sockaddr *) &clientaddr, clientlen);
+
 
       fclose(fp);
 

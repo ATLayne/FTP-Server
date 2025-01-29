@@ -24,8 +24,8 @@ void error(char *msg) {
 void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
-void get_cmd();
-void put_cmd();
+int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
+void put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 
 int main(int argc, char **argv) {
     int sockfd, portno, n;
@@ -81,7 +81,14 @@ int main(int argc, char **argv) {
 
         if(strncmp(buf, "delete", 6) == 0){
             if(delete_cmd(buf, sockfd, serveraddr, serverlen)){
-                perror("ls command failed\n");
+                perror("delete command failed\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if(strncmp(buf, "get", 3) == 0){
+            if(get_cmd(buf, sockfd, serveraddr, serverlen)){
+                perror("get command failed\n");
                 exit(EXIT_FAILURE);
             }
         }
@@ -162,7 +169,6 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
 }
 
 int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
-    printf("In delete_cmd\n");
     int n;
 
     serverlen = sizeof(serveraddr);
@@ -181,5 +187,36 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
 
         printf("%s", buf);
     }
+}
 
+int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
+    int n;
+    char res_buf[8 + 2048];
+    int packet_number;
+
+    serverlen = sizeof(serveraddr);
+    n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
+    if (n < 0) 
+        error("ERROR in sendto");
+
+    while ((n = recvfrom(sockfd, res_buf, 2056, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
+        if (n < 0) 
+            error("ERROR in recvfrom");
+        
+        memcpy(&packet_number, res_buf, sizeof(int));
+        
+        if(strncmp(res_buf + 4, "\n\r\n\r", 4) == 0){
+            bzero(buf, BUFSIZE);
+            printf("term_string received\n");
+            return(EXIT_SUCCESS);
+        }
+
+        printf("%s", res_buf + 8);
+
+        n = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
+
+        bzero(res_buf, 2056);
+    }
+
+    return 0;
 }
