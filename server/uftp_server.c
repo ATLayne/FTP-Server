@@ -40,8 +40,16 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
      */
     if(strncmp(command, exit_cmd, 4) == 0){
         printf("Exiting\n");
-        char ret_msg[] = "Server is terminating.\n";
-        int n = sendto(sockfd, ret_msg, strlen(ret_msg), 0, 
+        char return_message[] = "Server is terminating.\n";
+        char packet[8 + BUFSIZE];
+        int packet_number = 1;
+        char term_string[] = "\n\n\n\n";
+
+        memcpy(packet, &packet_number, sizeof(int));
+        memcpy(packet + 4, term_string, (4 * sizeof(char)));
+        memcpy(packet + 8, return_message, strlen(return_message));
+
+        int n = sendto(sockfd, packet, 8 + strlen(return_message), 0, 
 	       (struct sockaddr *) &clientaddr, clientlen);
         if (n < 0) 
           error("ERROR in \"exit\" sendto");
@@ -106,23 +114,36 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
      */
     if(strncmp(command, delete_cmd, 6) == 0) {
       int n;
+      char packet[8 + BUFSIZE];
       char fail_msg[] = "Could not delete file.\n";
       char suc_msg[] = "File Deleted Successfully.\n";
+      char term_string[] = "\n\n\n\n";
       char rm_cmd[50] = "rm";
       strcat(rm_cmd, (command + 6));
       printf("command to execute: %s\n", rm_cmd);
 
+      bzero(packet, 8 + BUFSIZE);
+
       if(system(rm_cmd) != 0){
-        n = sendto(sockfd, fail_msg, strlen(fail_msg), 0, 
+        memcpy(packet + 8, fail_msg, 8 + strlen(fail_msg));
+        n = sendto(sockfd, packet, 8 + strlen(fail_msg), 0, 
 	       (struct sockaddr *) &clientaddr, clientlen);
         if (n < 0) 
           error("ERROR in \"delete fail\" sendto");
       } else {
+        memcpy(packet + 8, suc_msg, 8 + strlen(suc_msg));
         n = sendto(sockfd, suc_msg, strlen(suc_msg), 0, 
 	       (struct sockaddr *) &clientaddr, clientlen);
         if (n < 0) 
           error("ERROR in \"delete suc\" sendto");
       }
+
+      bzero(packet, 8 + BUFSIZE);
+      memcpy(packet + 4, term_string, strlen(term_string));
+      n = sendto(sockfd, packet, 8, 0, 
+	       (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0) 
+          error("ERROR in \"delete fail\" sendto");
     }
 
     /*

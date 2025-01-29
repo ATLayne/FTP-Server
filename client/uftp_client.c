@@ -23,7 +23,7 @@ void error(char *msg) {
 
 void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
-void delete_cmd();
+int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 void get_cmd();
 void put_cmd();
 
@@ -65,11 +65,11 @@ int main(int argc, char **argv) {
     /* get a message from the user */
     while (1) {
         bzero(buf, BUFSIZE);
-        printf("Please enter msg: ");
+        printf("Please enter command: ");
         fgets(buf, BUFSIZE, stdin);
 
         if(strncmp(buf, "exit", 4) == 0){
-            exit_cmd();
+            exit_cmd(buf, sockfd, serveraddr, serverlen);
         }
 
         if(strncmp(buf, "ls", 2) == 0){
@@ -78,8 +78,15 @@ int main(int argc, char **argv) {
                 exit(EXIT_FAILURE);
             }
         }
-    }
 
+        if(strncmp(buf, "delete", 6) == 0){
+            if(delete_cmd(buf, sockfd, serveraddr, serverlen)){
+                perror("ls command failed\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    
     /* send the message to the server */
     serverlen = sizeof(serveraddr);
     n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
@@ -103,6 +110,7 @@ int main(int argc, char **argv) {
 void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     printf("In exit_cmd\n");
     int n;
+    char term_string[4];
 
     serverlen = sizeof(serveraddr);
     n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
@@ -112,11 +120,14 @@ void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverle
     while ((n = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0) {
         if (n < 0) 
             error("ERROR in recvfrom");
+
+        memcpy(term_string, buf + 4, (4 * sizeof(char)));
+
+        if(strncmp(term_string, "\n\n\n\n", 4) == 0) {
+            printf("Server acknowledged termination\nExiting...\n");
+            exit(EXIT_SUCCESS);
+        }
     }
-    
-
-
-    exit(EXIT_SUCCESS);
 }
 
 int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
@@ -148,4 +159,27 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
 
         n = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
     }
+}
+
+int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
+    printf("In delete_cmd\n");
+    int n;
+
+    serverlen = sizeof(serveraddr);
+    n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
+    if (n < 0) 
+        error("ERROR in sendto");
+
+    while ((n = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
+        if (n < 0) 
+            error("ERROR in recvfrom");
+        
+        if(strncmp(buf + 4, "\n\n\n\n", 4) == 0){
+            bzero(buf, BUFSIZE);
+            return(EXIT_SUCCESS);
+        }
+
+        printf("%s", buf);
+    }
+
 }
