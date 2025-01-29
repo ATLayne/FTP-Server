@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
     /* get a message from the user */
     while (1) {
         bzero(buf, BUFSIZE);
+        fflush(stdout);
         printf("Please enter command: ");
         fgets(buf, BUFSIZE, stdin);
 
@@ -197,12 +198,11 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     int packet_number;
     char term_string[4];
     FILE *fp;
-    char filename[50];
+    char filename[50] = {0};
 
-    memcpy(filename, buf + 4, strlen(buf) - 4);
+    memcpy(filename, buf + 4, strlen(buf) - 5);
 
     fp = fopen(filename, "w");
-    fp = fopen("download", "w");
 
     serverlen = sizeof(serveraddr);
     n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
@@ -218,6 +218,7 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
         
         if(strncmp(term_string, "\n\r\n\r", 4) == 0){
             bzero(buf, BUFSIZE);
+            bzero(res_buf, 2056);
             printf("\n\nterm_string received\n");
             fclose(fp);
             return(EXIT_SUCCESS);
