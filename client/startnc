@@ -1,3 +1,0 @@
-#!/bin/sh
-
-nc -u localhost 5050

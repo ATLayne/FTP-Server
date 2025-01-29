@@ -173,6 +173,7 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
       int n;
       char packet[PACKETSIZE] = {0};
       int bytes_read;
+      int bytes_read_from_file;
       int bytes_sent;
       int packet_number = 1;
       int packet_number_returned;
@@ -188,18 +189,17 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
         exit(EXIT_FAILURE);
       }
 
-      while ((bytes_read = fread(data, 1, DATASIZE, fp)) > 0) {
-        printf("bytes_read: %d\n", bytes_read);
-        //printf("buffer len: %d\n", sizeof(buffer) / sizeof(buffer[0]));
+      while ((bytes_read_from_file = fread(data, 1, DATASIZE, fp)) > 0) {
+        printf("bytes_read_from_file: %d\n", bytes_read_from_file);
         printf("Packet Number: %d\n", packet_number);
         
         memcpy(packet, &packet_number, sizeof(int));
-        memcpy(packet + HEADERSIZE, data, bytes_read);
+        memcpy(packet + HEADERSIZE, data, bytes_read_from_file);
 
-        printf("Packet Data:\n");
-        fwrite(packet + HEADERSIZE, sizeof(char), bytes_read, stdout);
+        //printf("Packet Data:\n");
+        //fwrite(packet + HEADERSIZE, sizeof(char), bytes_read, stdout);
         do {
-          bytes_sent = sendto(sockfd, packet, HEADERSIZE + bytes_read, 0, (struct sockaddr *) &clientaddr, clientlen);
+          bytes_sent = sendto(sockfd, packet, HEADERSIZE + bytes_read_from_file, 0, (struct sockaddr *) &clientaddr, clientlen);
           if (bytes_sent < 0) 
             error("ERROR in \"ls\" sendto");
 
@@ -216,7 +216,7 @@ void execute_command(char *command, int sockfd, struct sockaddr_in clientaddr, i
         } while (ack == 0);
         
         packet_number++;
-        bzero(packet, HEADERSIZE + bytes_read);
+        bzero(packet, HEADERSIZE + bytes_read_from_file);
       }
 
       

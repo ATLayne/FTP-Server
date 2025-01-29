@@ -265,7 +265,7 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
         }
 
         fwrite(packet + HEADERSIZE, sizeof(char), bytes_read - HEADERSIZE, fp);
-        fwrite(packet + HEADERSIZE, sizeof(char), bytes_read - HEADERSIZE, stdout);
+        //fwrite(packet + HEADERSIZE, sizeof(char), bytes_read - HEADERSIZE, stdout);
 
         bytes_sent = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
 
