@@ -28,11 +28,11 @@ void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverle
 int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
-void put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
+int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen);
 
 int main(int argc, char **argv) {
-    int sockfd, portno, n;
-    int serverlen;
+    int sockfd, portno;
+    int serverlen = 0;
     struct sockaddr_in serveraddr;
     struct hostent *server;
     char *hostname;
@@ -65,17 +65,11 @@ int main(int argc, char **argv) {
 	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
     serveraddr.sin_port = htons(portno);
 
-    /* get a message from the user */
+    /* get a command from the user */
     while (1) {
         bzero(buf, BUFSIZE);
         printf("Please enter command: ");
         fgets(buf, BUFSIZE, stdin);
-
-        // printf("Contents of command buf: %s", buf);
-
-        // for(int i = 0; i < 20; i++){
-        //     printf("%02x\n", buf[i]);
-        // }
 
         if(strncmp(buf, "exit", 4) == 0){
             exit_cmd(buf, sockfd, serveraddr, serverlen);
@@ -98,6 +92,13 @@ int main(int argc, char **argv) {
         if(strncmp(buf, "get", 3) == 0){
             if(get_cmd(buf, sockfd, serveraddr, serverlen)){
                 perror("get command failed\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if(strncmp(buf, "put", 3) == 0){
+            if(put_cmd(buf, sockfd, serveraddr, serverlen)){
+                perror("put command failed\n");
                 exit(EXIT_FAILURE);
             }
         }
@@ -126,13 +127,11 @@ int main(int argc, char **argv) {
 void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     setbuf(stdout, NULL);
     
-    printf("In exit_cmd\n");
-    int n;
+    char packet[PACKETSIZE] = {0};
     int bytes_sent;
     int bytes_read;
     int packet_number = 0;
     char term_string[4];
-    char packet[PACKETSIZE] = {0};
 
     memcpy(packet, &packet_number, sizeof(int));
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
@@ -142,7 +141,7 @@ void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverle
     if (bytes_sent < 0) 
         error("ERROR in sendto");
 
-    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0) {
+    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen)) > 0) {
         if (bytes_read < 0) 
             error("ERROR in recvfrom");
 
@@ -159,12 +158,11 @@ void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverle
 int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     setbuf(stdout, NULL);
     
-    int n;
+    char packet[PACKETSIZE] = {0};
     int bytes_sent;
     int bytes_read;
     int packet_number = 0;
     char term_string[4];
-    char packet[PACKETSIZE] = {0};
 
     memcpy(packet, &packet_number, sizeof(int));
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
@@ -174,7 +172,7 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     if (bytes_sent < 0) 
         error("ERROR in sendto");
 
-    while((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
+    while((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen)) > 0){
         if (bytes_read < 0) 
             error("ERROR in recvfrom");
         
@@ -186,22 +184,23 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
             return EXIT_SUCCESS;
         }
         
-        printf("Packet No. %d %s", packet_number, packet + HEADERSIZE);
+        printf("%s", packet + HEADERSIZE);
         bzero(packet, bytes_read);
 
         bytes_sent = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
     }
+    
+    return EXIT_FAILURE;
 }
 
 int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     setbuf(stdout, NULL);
 
-    int n;
+    char packet[PACKETSIZE] = {0};
     int bytes_sent;
     int bytes_read;
     int packet_number = 0;
     char term_string[4];
-    char packet[PACKETSIZE] = {0};
 
     memcpy(packet, &packet_number, sizeof(int));
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
@@ -211,7 +210,7 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
     if (bytes_sent < 0) 
         error("ERROR in sendto");
 
-    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
+    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen)) > 0){
         if (bytes_read < 0) 
             error("ERROR in recvfrom");
 
@@ -224,19 +223,21 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
 
         printf("%s", packet + HEADERSIZE);
     }
+
+    return EXIT_FAILURE;
 }
 
 int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     setbuf(stdout, NULL);
 
-    int bytes_sent;
-    int bytes_read;
-    char packet[PACKETSIZE];
-    char data[DATASIZE];
-    int packet_number = 0;
-    char term_string[4];
     FILE *fp;
     char filename[50] = {0};
+    char packet[PACKETSIZE];
+    //char data[DATASIZE];
+    int bytes_sent;
+    int bytes_read;
+    int packet_number = 0;
+    char term_string[4];
 
     memcpy(filename, buf + 4, strlen(buf) - 5);
     fp = fopen(filename, "w");
@@ -249,7 +250,7 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     if (bytes_sent < 0) 
         error("ERROR in sendto");
 
-    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
+    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen)) > 0){
         if (bytes_read < 0) 
             error("ERROR in recvfrom");
         
@@ -271,6 +272,106 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
 
         bzero(packet, PACKETSIZE);
     }
+
+    return 0;
+}
+
+int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
+    setbuf(stdout, NULL);
+
+    FILE *fp;
+    char filename[50] = {0};
+    char packet[PACKETSIZE];
+    char data[DATASIZE];
+    int bytes_sent;
+    int bytes_read;
+    int packet_number = 0;
+    char term_string[4] = "\n\r\n\r";
+    int ack = 0;
+    int bytes_read_from_file;
+    int packet_number_returned;
+
+    memcpy(filename, buf + 4, strlen(buf) - 5);
+    fp = fopen(filename, "rb");
+    if(fp == NULL){
+        perror("Error opening file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Filename: %s\n", filename);
+
+    memcpy(packet, &packet_number, sizeof(int));
+    memcpy(packet + HEADERSIZE, buf, strlen(buf));
+
+    serverlen = sizeof(serveraddr);
+    bytes_sent = sendto(sockfd, packet, HEADERSIZE + strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
+    if (bytes_sent < 0) 
+        error("ERROR in sendto");
+
+    bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
+    if (bytes_read < 0) 
+        error("ERROR in recvfrom");
+
+    memcpy(&ack, packet + HEADERSIZE, sizeof(int));
+
+    if(ack != 1){
+        printf("No ack from server. Exiting\n");
+        exit(EXIT_FAILURE);
+    } else {
+        while ((bytes_read_from_file = fread(data, 1, DATASIZE, fp)) > 0) {
+            printf("bytes_read_from_file: %d\n", bytes_read_from_file);
+            printf("Packet Number: %d\n", packet_number);
+            
+            memcpy(packet, &packet_number, sizeof(int));
+            memcpy(packet + HEADERSIZE, data, bytes_read_from_file);
+
+            //printf("Packet Data:\n");
+            //fwrite(packet + HEADERSIZE, sizeof(char), bytes_read, stdout);
+            do {
+                bytes_sent = sendto(sockfd, packet, HEADERSIZE + bytes_read_from_file, 0, (struct sockaddr *)&serveraddr, serverlen);
+                    if (bytes_sent < 0) 
+                    error("ERROR in \"ls\" sendto");
+
+                bytes_read = recvfrom(sockfd, &packet_number_returned, sizeof(int), 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
+
+                if(packet_number_returned == packet_number){
+                ack = 1;
+                } else {
+                ack = 0;
+                }
+
+            } while (ack == 0);
+            
+            packet_number++;
+            bzero(packet, HEADERSIZE + bytes_read_from_file);
+        }
+
+        bzero(packet, PACKETSIZE);
+        memcpy(packet + 4, term_string, 4);
+        bytes_sent = sendto(sockfd, packet, HEADERSIZE, 0, (struct sockaddr *)&serveraddr, serverlen);
+            if (bytes_sent < 0) 
+            error("ERROR in \"ls\" sendto");
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     return 0;
 }
