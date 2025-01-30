@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> 
+#include <sys/time.h>
 
 #define BUFSIZE 1024
 #define DATASIZE 2048
@@ -37,6 +38,7 @@ int main(int argc, char **argv) {
     struct hostent *server;
     char *hostname;
     char buf[BUFSIZE];
+    struct timeval timeout;
 
     /* check command line arguments */
     if (argc != 3) {
@@ -50,6 +52,15 @@ int main(int argc, char **argv) {
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) 
         error("ERROR opening socket");
+
+
+    // Set the timeout
+    timeout.tv_sec = 5; // 5 seconds timeout
+    timeout.tv_usec = 0;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+        perror("Error setting timeout");
+        exit(1);
+    }
 
     /* gethostbyname: get the server's DNS entry */
     server = gethostbyname(hostname);
@@ -103,23 +114,6 @@ int main(int argc, char **argv) {
             }
         }
     }
-    
-    // /* send the message to the server */
-    // serverlen = sizeof(serveraddr);
-    // n = sendto(sockfd, buf, strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
-    // if (n < 0) 
-    //   error("ERROR in sendto");
-    
-    // /* print the server's reply */
-    // printf("Command: %s\n", buf);
-    // while((n = recvfrom(sockfd, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &serverlen)) > 0){
-    
-    //     if (n < 0) 
-    //         error("ERROR in recvfrom");
-
-    //     printf("%s", buf);
-    //     bzero(buf, n);
-    // }
 
     return 0;
 }
@@ -147,8 +141,8 @@ void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverle
 
         memcpy(term_string, packet + 4, (4 * sizeof(char)));
 
-        if(strncmp(term_string, "\n\n\n\n", 4) == 0) {
-            printf("Server acknowledged termination\nExiting...\n");
+        if(strncmp(term_string, "\n\r\n\r", 4) == 0) {
+            printf("%s", packet + HEADERSIZE);
             bzero(buf, BUFSIZE);
             exit(EXIT_SUCCESS);
         }
@@ -179,7 +173,7 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
         memcpy(&packet_number, packet, sizeof(int));
         memcpy(term_string, packet + sizeof(int), (4 * sizeof(char)));
         
-        if(strncmp(term_string, "\n\n\n\n", 4) == 0){
+        if(strncmp(term_string, "\n\r\n\r", 4) == 0){
             bzero(packet, PACKETSIZE);
             return EXIT_SUCCESS;
         }
@@ -216,7 +210,7 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
 
         memcpy(term_string, packet + 4, (4 * sizeof(char)));
         
-        if(strncmp(packet + 4, "\n\n\n\n", 4) == 0){
+        if(strncmp(packet + 4, "\n\r\n\r", 4) == 0){
             bzero(buf, BUFSIZE);
             return(EXIT_SUCCESS);
         }
@@ -233,7 +227,6 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     FILE *fp;
     char filename[50] = {0};
     char packet[PACKETSIZE];
-    //char data[DATASIZE];
     int bytes_sent;
     int bytes_read;
     int packet_number = 0;
@@ -266,7 +259,6 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
         }
 
         fwrite(packet + HEADERSIZE, sizeof(char), bytes_read - HEADERSIZE, fp);
-        //fwrite(packet + HEADERSIZE, sizeof(char), bytes_read - HEADERSIZE, stdout);
 
         bytes_sent = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
 
@@ -325,8 +317,6 @@ int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
             memcpy(packet, &packet_number, sizeof(int));
             memcpy(packet + HEADERSIZE, data, bytes_read_from_file);
 
-            //printf("Packet Data:\n");
-            //fwrite(packet + HEADERSIZE, sizeof(char), bytes_read, stdout);
             do {
                 bytes_sent = sendto(sockfd, packet, HEADERSIZE + bytes_read_from_file, 0, (struct sockaddr *)&serveraddr, serverlen);
                     if (bytes_sent < 0) 
@@ -352,26 +342,6 @@ int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
             if (bytes_sent < 0) 
             error("ERROR in \"ls\" sendto");
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     return 0;
 }
