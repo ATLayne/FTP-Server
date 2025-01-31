@@ -120,22 +120,16 @@ int main(int argc, char **argv) {
     
     if(strncmp(command, "exit", 4) == 0){
         exit_cmd(command, sockfd, clientaddr, clientlen);
-    }
-
-    if(strncmp(command, "delete", 6) == 0){
+    } else if(strncmp(command, "delete", 6) == 0){
         delete_cmd(command, sockfd, clientaddr, clientlen);
-    }
-
-    if(strncmp(command, "ls", 2) == 0){
+    } else if(strncmp(command, "ls", 2) == 0){
         ls_cmd(command, sockfd, clientaddr, clientlen);
-    }
-
-    if(strncmp(command, "get", 3) == 0){
+    } else if(strncmp(command, "get", 3) == 0){
         get_cmd(command, sockfd, clientaddr, clientlen);
-    }
-
-    if(strncmp(command, "put", 3) == 0){
+    } else if(strncmp(command, "put", 3) == 0){
         put_cmd(command, sockfd, clientaddr, clientlen);
+    } else {
+        continue;
     }
 
     /* 
@@ -223,14 +217,12 @@ int ls_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int clientl
     int packet_number_ret;
     int bytes_sent;
     int bytes_read;
-    int ack = 0;
+    //int ack = 0;
 
     fp = popen(command, "r");
     while(fgets(data, DATASIZE, fp) != NULL){
       memcpy(packet, &packet_number, sizeof(int));
       memcpy(packet + HEADERSIZE, data, strlen(data));
-
-
 
       bytes_sent = sendto(sockfd, packet, HEADERSIZE + strlen(data), 0, (struct sockaddr *) &clientaddr, clientlen);
 
@@ -243,24 +235,6 @@ int ls_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int clientl
             break;
           }
       }
-
-      // do {
-      //   bytes_sent = sendto(sockfd, packet, HEADERSIZE + strlen(data), 0, 
-      //   (struct sockaddr *) &clientaddr, clientlen);
-      //   if (bytes_sent < 0) 
-      //     error("ERROR in \"ls\" sendto");
-
-      //   bytes_read = recvfrom(sockfd, &packet_number_ret, sizeof(int), 0, (struct sockaddr *) &clientaddr, (socklen_t *)&clientlen);
-      //   if (bytes_read < 0) 
-      //       error("ERROR in recvfrom");
-
-      //   if(packet_number_ret == packet_number){
-      //     ack = 1;
-      //   } else {
-      //     ack = 0;
-      //   }
-
-      // } while (ack == 0);
 
       bzero(packet, HEADERSIZE + strlen(data));
       packet_number++;
@@ -286,8 +260,9 @@ int get_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
     int bytes_sent;
     int packet_number = 1;
     int client_reply = 1;
-    int ack = 0;
+    //int ack = 0;
     char term_string[4] = "\n\r\n\r";
+    int total_bytes_read = 0;
 
     filename = command + 4;
     filename[strlen(filename) - 1] = '\0';
@@ -300,7 +275,8 @@ int get_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
     }
 
     while ((bytes_read_from_file = fread(data, 1, DATASIZE, fp)) > 0) {
-      printf("Packet Number: %d\n", packet_number);
+      total_bytes_read += bytes_read_from_file;
+      //printf("Packet Number: %d\n", packet_number);
       memcpy(packet, &packet_number, sizeof(int));
       memcpy(packet + HEADERSIZE, data, bytes_read_from_file);
 
@@ -326,6 +302,7 @@ int get_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
     bytes_sent = sendto(sockfd, packet, 8, 0, (struct sockaddr *) &clientaddr, clientlen);
 
     fclose(fp);
+    printf("Total Bytes Sent: %d\n", total_bytes_read);
 
     return 0;
 }
@@ -342,10 +319,11 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
     int last_packet_number = 0;
     int ack = 0;
     char term_string[4];
+    int total_bytes_read = 0;
 
     filename = command + 4;
     filename[strlen(filename) - 1] = '\0';
-    printf("filename: \"%s\"\n", filename);
+    //printf("filename: \"%s\"\n", filename);
 
     fp = fopen(filename, "w");
     if(fp == NULL){
@@ -368,6 +346,7 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
         if(bytes_read < 0)
           continue;
         
+        total_bytes_read += (bytes_read - HEADERSIZE);
         memcpy(&packet_number, packet, sizeof(int));
 
         if(packet_number == last_packet_number){
@@ -382,12 +361,13 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
         if(strncmp(term_string, "\n\r\n\r", 4) == 0){
             bzero(command, BUFSIZE);
             bzero(packet, PACKETSIZE);
-            printf("term_string received\n");
+            //printf("term_string received\n");
             fclose(fp);
+            printf("Total Bytes Received: %d\n",total_bytes_read);
             return(EXIT_SUCCESS);
         }
 
-        printf("Packet Number: %d\n", packet_number);
+        //printf("Packet Number: %d\n", packet_number);
         fwrite(packet + HEADERSIZE, sizeof(char), bytes_read - HEADERSIZE, fp);
 
         bytes_sent = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&clientaddr, clientlen);

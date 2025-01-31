@@ -40,6 +40,7 @@ int main(int argc, char **argv) {
     char *hostname;
     char buf[BUFSIZE];
     struct timeval timeout;
+    int cmd_status;
 
     /* check command line arguments */
     if (argc != 3) {
@@ -80,39 +81,38 @@ int main(int argc, char **argv) {
     /* get a command from the user */
     while (1) {
         bzero(buf, BUFSIZE);
-        printf("Please enter command: ");
+        printf("Please enter command: \n");
+        printf("get [filename], put [filename], delete [filename], ls, or exit: ");
         fgets(buf, BUFSIZE, stdin);
 
         if(strncmp(buf, "exit", 4) == 0){
             exit_cmd(buf, sockfd, serveraddr, serverlen);
-        }
-
-        if(strncmp(buf, "ls", 2) == 0){
-            if(ls_cmd(buf, sockfd, serveraddr, serverlen)){
-                perror("ls command failed\n");
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        if(strncmp(buf, "delete", 6) == 0){
-            if(delete_cmd(buf, sockfd, serveraddr, serverlen)){
-                perror("delete command failed\n");
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        if(strncmp(buf, "get", 3) == 0){
-            if(get_cmd(buf, sockfd, serveraddr, serverlen)){
-                perror("get command failed\n");
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        if(strncmp(buf, "put", 3) == 0){
-            if(put_cmd(buf, sockfd, serveraddr, serverlen)){
-                perror("put command failed\n");
-                exit(EXIT_FAILURE);
-            }
+        } else if(strncmp(buf, "ls", 2) == 0){
+            cmd_status = ls_cmd(buf, sockfd, serveraddr, serverlen);
+            // if(ls_cmd(buf, sockfd, serveraddr, serverlen)){
+            //     perror("ls command failed\n");
+            //     exit(EXIT_FAILURE);
+            // }
+        } else if(strncmp(buf, "delete", 6) == 0){
+            cmd_status = delete_cmd(buf, sockfd, serveraddr, serverlen);
+            // if(delete_cmd(buf, sockfd, serveraddr, serverlen)){
+            //     perror("delete command failed\n");
+            //     exit(EXIT_FAILURE);
+            // }
+        } else if(strncmp(buf, "get", 3) == 0){
+            cmd_status = get_cmd(buf, sockfd, serveraddr, serverlen);
+            // if(get_cmd(buf, sockfd, serveraddr, serverlen)){
+            //     perror("get command failed\n");
+            //     exit(EXIT_FAILURE);
+            // }
+        } else if(strncmp(buf, "put", 3) == 0){
+            cmd_status = put_cmd(buf, sockfd, serveraddr, serverlen);
+            // if(put_cmd(buf, sockfd, serveraddr, serverlen)){
+            //     perror("put command failed\n");
+            //     exit(EXIT_FAILURE);
+            // }
+        } else {
+            printf("Command not recognized\n");
         }
     }
 
@@ -127,6 +127,7 @@ void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverle
     int bytes_read;
     int packet_number = 0;
     char term_string[4];
+    int timeout_counter = 0;
 
     memcpy(packet, &packet_number, sizeof(int));
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
@@ -136,9 +137,18 @@ void exit_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverle
     if (bytes_sent < 0) 
         error("ERROR in sendto");
 
-    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen)) > 0) {
-        if (bytes_read < 0) 
-            error("ERROR in recvfrom");
+    while (1) {
+        bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
+        if(bytes_read < 0){
+            timeout_counter++;
+            if (timeout_counter == 10)
+            {
+                printf("Timeout: No response from server\n");
+                printf("Exiting...\n");
+                exit(-1);
+            }
+            continue;
+        }
 
         memcpy(term_string, packet + 4, (4 * sizeof(char)));
 
@@ -160,6 +170,7 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     int packet_number = 0;
     int last_packet_number;
     char term_string[4];
+    int timeout_counter = 0;
 
     memcpy(packet, &packet_number, sizeof(int));
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
@@ -172,8 +183,13 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
     while(1){
 
         bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
-        if (bytes_read < 0) {
-            printf("Continuing\n");
+        if(bytes_read < 0){
+            timeout_counter++;
+            if (timeout_counter == 10)
+            {
+                printf("Timeout: No response from server\n");
+                return EXIT_FAILURE;
+            }
             continue;
         }
         
@@ -189,6 +205,7 @@ int ls_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen){
         
         if(strncmp(term_string, "\n\r\n\r", 4) == 0){
             bzero(packet, PACKETSIZE);
+            printf("\n\n");
             return EXIT_SUCCESS;
         }
         
@@ -209,6 +226,7 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
     int bytes_read;
     int packet_number = 0;
     char term_string[4];
+    int timeout_counter = 0;
 
     memcpy(packet, &packet_number, sizeof(int));
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
@@ -218,9 +236,17 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
     if (bytes_sent < 0) 
         error("ERROR in sendto");
 
-    while ((bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen)) > 0){
-        if (bytes_read < 0) 
-            error("ERROR in recvfrom");
+    while (1){
+        bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
+        if(bytes_read < 0){
+            timeout_counter++;
+            if (timeout_counter == 10)
+            {
+                printf("Timeout: No response from server\n");
+                return EXIT_FAILURE;
+            }
+            continue;
+        }
 
         memcpy(term_string, packet + 4, (4 * sizeof(char)));
         
@@ -229,7 +255,7 @@ int delete_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverl
             return(EXIT_SUCCESS);
         }
 
-        printf("%s", packet + HEADERSIZE);
+        printf("%s\n\n", packet + HEADERSIZE);
     }
 
     return EXIT_FAILURE;
@@ -244,11 +270,12 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     int bytes_sent;
     int bytes_read;
     int packet_number = 0;
-    int recvfrom_failure = 1;
-    int recvfrom_success = 0;
+    //int recvfrom_failure = 1;
+    //int recvfrom_success = 0;
     int last_packet_number = 0;
     char term_string[4];
-    int i = 1;
+    int timeout_counter = 0;
+    //int i = 1;
 
     memcpy(filename, buf + 4, strlen(buf) - 5);
     fp = fopen(filename, "w");
@@ -264,8 +291,15 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     while (1){
 
         bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
-        if(bytes_read < 0)
-          continue;
+        if(bytes_read < 0){
+            timeout_counter++;
+            if (timeout_counter == 10)
+            {
+                printf("Timeout: No response from server\n");
+                return EXIT_FAILURE;
+            }
+            continue;
+        }
         
         memcpy(&packet_number, packet, sizeof(int));
         if(packet_number == last_packet_number){
@@ -280,12 +314,12 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
         if(strncmp(term_string, "\n\r\n\r", 4) == 0){
             bzero(buf, BUFSIZE);
             bzero(packet, PACKETSIZE);
-            printf("term_string received\n");
+            printf("File Transfer Complete\n\n");
             fclose(fp);
             return(EXIT_SUCCESS);
         }
 
-        printf("Packet Number: %d\n", packet_number);
+        //printf("Packet Number: %d\n", packet_number);
         fwrite(packet + HEADERSIZE, sizeof(char), bytes_read - HEADERSIZE, fp);
 
         bytes_sent = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&serveraddr, serverlen);
@@ -316,10 +350,10 @@ int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     fp = fopen(filename, "rb");
     if(fp == NULL){
         perror("Error opening file\n");
-        exit(EXIT_FAILURE);
+        return(EXIT_FAILURE);
     }
 
-    printf("Filename: %s\n", filename);
+    //printf("Filename: %s\n", filename);
 
     memcpy(packet, &packet_number, sizeof(int));
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
@@ -332,8 +366,17 @@ int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
     memcpy(&ack, packet + HEADERSIZE, sizeof(int));
 
+    if(bytes_read < 0){
+            //timeout_counter++;
+            //if (timeout_counter == 10);{
+                printf("Timeout: No response from server\n");
+                return EXIT_FAILURE;
+            //}
+            //continue;
+    }
+
     while ((bytes_read_from_file = fread(data, 1, DATASIZE, fp)) > 0) {
-        printf("Packet Number: %d\n", packet_number);
+        //printf("Packet Number: %d\n", packet_number);
         memcpy(packet, &packet_number, sizeof(int));
         memcpy(packet + HEADERSIZE, data, bytes_read_from_file);
 
@@ -343,7 +386,7 @@ int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
 
         bytes_read = recvfrom(sockfd, &packet_number_returned, sizeof(int), 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
         while (bytes_read < 0) {
-            printf("Did not get ack for packet no: %d\n", packet_number);
+            //printf("Did not get ack for packet no: %d\n", packet_number);
             bytes_sent = sendto(sockfd, packet, HEADERSIZE + bytes_read_from_file, 0, (struct sockaddr *) &serveraddr, serverlen);
             bytes_read = recvfrom(sockfd, &packet_number_returned, sizeof(int), 0, (struct sockaddr *) &serveraddr, (socklen_t *)&serverlen);
             if(packet_number_returned == packet_number){
@@ -360,6 +403,8 @@ int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     bytes_sent = sendto(sockfd, packet, HEADERSIZE, 0, (struct sockaddr *)&serveraddr, serverlen);
         if (bytes_sent < 0) 
         error("ERROR in \"ls\" sendto");
+    
+    printf("File Transfer Complete\n\n");
     
 
     return 0;
