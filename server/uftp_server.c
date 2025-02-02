@@ -335,27 +335,38 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
     memcpy(packet + HEADERSIZE, &ack, sizeof(int));
 
     clientlen = sizeof(clientaddr);
-    bytes_sent = sendto(sockfd, packet, HEADERSIZE + sizeof(int), 0, (struct sockaddr *)&clientaddr, clientlen);
-    if (bytes_sent < 0) 
-        error("ERROR in sendto");
+        
+    while(1){
+        bytes_sent = sendto(sockfd, packet, HEADERSIZE + sizeof(int), 0, (struct sockaddr *)&clientaddr, clientlen);
+        if (bytes_sent < 0) 
+            error("ERROR in sendto");
 
-    bzero(packet, PACKETSIZE);
+        bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&clientaddr, (socklen_t *)&clientlen);
+        bzero(packet, PACKETSIZE);
+        if(bytes_read < 0){
+          continue;
+        } else {
+          memcpy(&last_packet_number, packet, sizeof(int));
+          break;
+        }
+    }
 
+    printf("File Transfering\n");
     while (1){
         bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&clientaddr, (socklen_t *)&clientlen);
         if(bytes_read < 0)
           continue;
         
-        total_bytes_read += (bytes_read - HEADERSIZE);
         memcpy(&packet_number, packet, sizeof(int));
 
         if(packet_number == last_packet_number){
             //last_packet_number = packet_number;
-            printf("Discarding Packet No: %d\n", packet_number);
+            //printf("Discarding Packet No: %d\n", packet_number);
             bytes_sent = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&clientaddr, clientlen);
             bzero(packet, PACKETSIZE);
             continue;
         }
+        total_bytes_read += (bytes_read - HEADERSIZE);
         memcpy(term_string, packet +  4, 4 * sizeof(char));
         
         if(strncmp(term_string, "\n\r\n\r", 4) == 0){

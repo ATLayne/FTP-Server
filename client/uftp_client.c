@@ -292,12 +292,12 @@ int get_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
 
         bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
         if(bytes_read < 0){
-            timeout_counter++;
-            if (timeout_counter == 10)
-            {
-                printf("Timeout: No response from server\n");
-                return EXIT_FAILURE;
-            }
+            // timeout_counter++;
+            // if (timeout_counter == 10)
+            // {
+            //     printf("Timeout: No response from server\n");
+            //     return EXIT_FAILURE;
+            // }
             continue;
         }
         
@@ -359,22 +359,28 @@ int put_cmd(char *buf, int sockfd, struct sockaddr_in serveraddr, int serverlen)
     memcpy(packet + HEADERSIZE, buf, strlen(buf));
 
     serverlen = sizeof(serveraddr);
-    bytes_sent = sendto(sockfd, packet, HEADERSIZE + strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
-    if (bytes_sent < 0) 
-        error("ERROR in sendto");
+    
+    while(1){
+        bytes_sent = sendto(sockfd, packet, HEADERSIZE + strlen(buf), 0, (struct sockaddr *)&serveraddr, serverlen);
+            if (bytes_sent < 0) 
+                error("ERROR in sendto");
+        bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
+        memcpy(&ack, packet + HEADERSIZE, sizeof(int));
 
-    bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&serveraddr, (socklen_t *)&serverlen);
-    memcpy(&ack, packet + HEADERSIZE, sizeof(int));
-
-    if(bytes_read < 0){
-            //timeout_counter++;
-            //if (timeout_counter == 10);{
-                printf("Timeout: No response from server\n");
-                return EXIT_FAILURE;
-            //}
-            //continue;
+        if(bytes_read < 0){
+                //timeout_counter++;
+                //if (timeout_counter == 10);{
+                    //printf("Timeout: No response from server\n");
+                    //return EXIT_FAILURE;
+                //}
+                continue;
+        } else {
+            break;
+        }
     }
 
+    printf("File Transfer In Progress\n");
+    packet_number++;
     while ((bytes_read_from_file = fread(data, 1, DATASIZE, fp)) > 0) {
         //printf("Packet Number: %d\n", packet_number);
         memcpy(packet, &packet_number, sizeof(int));
