@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
   struct timeval timeout;
 
   timeout.tv_sec = 0; // 5 seconds timeout
-  timeout.tv_usec = 500;
+  timeout.tv_usec = 1500;
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
       perror("Error setting timeout");
       exit(1);
@@ -217,7 +217,6 @@ int ls_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int clientl
     int packet_number_ret;
     int bytes_sent;
     int bytes_read;
-    //int ack = 0;
 
     fp = popen(command, "r");
     while(fgets(data, DATASIZE, fp) != NULL){
@@ -225,6 +224,8 @@ int ls_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int clientl
       memcpy(packet + HEADERSIZE, data, strlen(data));
 
       bytes_sent = sendto(sockfd, packet, HEADERSIZE + strlen(data), 0, (struct sockaddr *) &clientaddr, clientlen);
+      if (bytes_sent < 0) 
+        error("ERROR in sendto");
 
       bytes_read = recvfrom(sockfd, &packet_number_ret, sizeof(int), 0, (struct sockaddr *) &clientaddr, (socklen_t *)&clientlen);
       while (bytes_read < 0) {
@@ -260,7 +261,6 @@ int get_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
     int bytes_sent;
     int packet_number = 1;
     int client_reply = 1;
-    //int ack = 0;
     char term_string[4] = "\n\r\n\r";
     int total_bytes_read = 0;
 
@@ -323,7 +323,6 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
 
     filename = command + 4;
     filename[strlen(filename) - 1] = '\0';
-    //printf("filename: \"%s\"\n", filename);
 
     fp = fopen(filename, "w");
     if(fp == NULL){
@@ -336,20 +335,10 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
 
     clientlen = sizeof(clientaddr);
         
-    while(1){
-        bytes_sent = sendto(sockfd, packet, HEADERSIZE + sizeof(int), 0, (struct sockaddr *)&clientaddr, clientlen);
-        if (bytes_sent < 0) 
-            error("ERROR in sendto");
-
-        bytes_read = recvfrom(sockfd, packet, PACKETSIZE, 0, (struct sockaddr *)&clientaddr, (socklen_t *)&clientlen);
-        bzero(packet, PACKETSIZE);
-        if(bytes_read < 0){
-          continue;
-        } else {
-          memcpy(&last_packet_number, packet, sizeof(int));
-          break;
-        }
-    }
+    
+    bytes_sent = sendto(sockfd, packet, HEADERSIZE + sizeof(int), 0, (struct sockaddr *)&clientaddr, clientlen);
+    if (bytes_sent < 0) 
+        error("ERROR in sendto");
 
     printf("File Transfering\n");
     while (1){
@@ -361,7 +350,7 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
 
         if(packet_number == last_packet_number){
             //last_packet_number = packet_number;
-            //printf("Discarding Packet No: %d\n", packet_number);
+            printf("Discarding Packet No: %d\n", packet_number);
             bytes_sent = sendto(sockfd, &packet_number, sizeof(int), 0, (struct sockaddr *)&clientaddr, clientlen);
             bzero(packet, PACKETSIZE);
             continue;
@@ -372,7 +361,6 @@ int put_cmd(char *command, int sockfd, struct sockaddr_in clientaddr, int client
         if(strncmp(term_string, "\n\r\n\r", 4) == 0){
             bzero(command, BUFSIZE);
             bzero(packet, PACKETSIZE);
-            //printf("term_string received\n");
             fclose(fp);
             printf("Total Bytes Received: %d\n",total_bytes_read);
             return(EXIT_SUCCESS);
